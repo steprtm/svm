@@ -1,7 +1,6 @@
 {
-  "accuracy": 0.7,
-  "precision_positive": 0.67,
-  "recall_positive": 0.74,
-  "precision_negative": 0.73,
-  "recall_negative": 0.66
+    "accuracy": 0.6857142857142857,
+    "precision": 0.7261810019385777,
+    "recall": 0.6378178335074888,
+    "f1_score": 0.6620651070763727
 }

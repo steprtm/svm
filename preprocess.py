@@ -1,51 +1,57 @@
-# ================================
-# PREPROCESS + SENTIMENT LABELING
-# ID + EN | 3 KELAS (POS, NEG, NEU)
-# ================================
+# =========================================
+# PREPROCESS + SENTIMENT CLASSIFICATION
+# ID & EN | POSITIVE - NEGATIVE - NEUTRAL
+# METHOD : TF-IDF + SVM (LinearSVC)
+# =========================================
 
 import pandas as pd
 import re
 import nltk
 import joblib
+import json
 
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
-from sklearn.metrics import classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    precision_recall_fscore_support,
+    classification_report
+)
 
 from nltk.corpus import stopwords
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# ================================
-# DOWNLOAD NLTK
-# ================================
+# =========================================
+# NLTK DOWNLOAD
+# =========================================
 nltk.download("stopwords")
 
-# ================================
-# LOAD DATA
-# ================================
+# =========================================
+# LOAD DATASET
+# =========================================
 df = pd.read_csv(r"C:\sempro\dataset\dataraw.csv")
 
-# Pastikan kolom teks benar
+# Pastikan kolom teks
 df = df.rename(columns={"full_text": "text"})
 
-# Ambil hanya ID & EN
+# Ambil hanya Bahasa Indonesia & Inggris
 df = df[df["lang"].isin(["id", "en"])]
 
-# Drop kosong
+# Hapus data kosong
 df = df.dropna(subset=["text"])
 
 print("Jumlah data awal:", len(df))
 
-# ================================
+# =========================================
 # STOPWORDS
-# ================================
+# =========================================
 stop_id = set(stopwords.words("indonesian"))
 stop_en = set(stopwords.words("english"))
 
-# ================================
+# =========================================
 # CLEANING FUNCTION
-# ================================
+# =========================================
 def clean_text(text, lang):
     text = text.lower()
     text = re.sub(r"http\S+|www\S+", "", text)
@@ -62,12 +68,13 @@ def clean_text(text, lang):
     return " ".join(tokens)
 
 df["clean_text"] = df.apply(
-    lambda x: clean_text(x["text"], x["lang"]), axis=1
+    lambda x: clean_text(x["text"], x["lang"]),
+    axis=1
 )
 
-# ================================
+# =========================================
 # SENTIMENT LABELING
-# ================================
+# =========================================
 analyzer = SentimentIntensityAnalyzer()
 
 # Lexicon sederhana Bahasa Indonesia
@@ -96,15 +103,16 @@ def label_sentiment(text, lang):
         return "neutral"
 
 df["sentiment"] = df.apply(
-    lambda x: label_sentiment(x["clean_text"], x["lang"]), axis=1
+    lambda x: label_sentiment(x["clean_text"], x["lang"]),
+    axis=1
 )
 
-print("\nDistribusi sentimen:")
+print("\nDistribusi Sentimen:")
 print(df["sentiment"].value_counts())
 
-# ================================
-# TF-IDF VECTOR
-# ================================
+# =========================================
+# TF-IDF FEATURE EXTRACTION
+# =========================================
 X = df["clean_text"]
 y = df["sentiment"]
 
@@ -115,9 +123,9 @@ vectorizer = TfidfVectorizer(
 
 X_tfidf = vectorizer.fit_transform(X)
 
-# ================================
+# =========================================
 # TRAIN TEST SPLIT
-# ================================
+# =========================================
 X_train, X_test, y_train, y_test = train_test_split(
     X_tfidf,
     y,
@@ -126,30 +134,58 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-# ================================
-# TRAIN SVM (MULTICLASS)
-# ================================
+# =========================================
+# TRAIN SVM MODEL (MULTICLASS)
+# =========================================
 model = LinearSVC()
 model.fit(X_train, y_train)
 
-# ================================
-# EVALUATION
-# ================================
+# =========================================
+# MODEL EVALUATION
+# =========================================
 y_pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, y_pred)
+
+precision, recall, f1, _ = precision_recall_fscore_support(
+    y_test,
+    y_pred,
+    average="macro"
+)
+
+print("\n=== HASIL EVALUASI MODEL ===")
+print(f"Accuracy  : {accuracy:.4f}")
+print(f"Precision : {precision:.4f}")
+print(f"Recall    : {recall:.4f}")
+print(f"F1-Score  : {f1:.4f}")
 
 print("\nClassification Report:\n")
 print(classification_report(y_test, y_pred))
 
-# ================================
-# SAVE OUTPUT
-# ================================
-df.to_csv("dataset_berlabel.csv", index=False)
+# =========================================
+# SAVE METRICS (UNTUK STREAMLIT)
+# =========================================
+metrics = {
+    "accuracy": accuracy,
+    "precision": precision,
+    "recall": recall,
+    "f1_score": f1
+}
+
+with open(r"C:\sempro\dataset\model_metrics.json", "w") as f:
+    json.dump(metrics, f, indent=4)
+
+
+# =========================================
+# SAVE OUTPUT FILES
+# =========================================
+df.to_csv(r"C:\sempro\dataset\dataset_berlabel.csv", index=False)
 joblib.dump(model, r"C:\sempro\dataset\svm_model.pkl")
 joblib.dump(vectorizer, r"C:\sempro\dataset\tfidf_vectorizer.pkl")
-df.to_csv(r"C:\sempro\dataset\dataset_berlabel.csv", index=False)
 
-print("\nPreprocessing selesai.")
+print("\nPreprocessing & Training selesai.")
 print("File tersimpan:")
 print("- dataset_berlabel.csv")
 print("- svm_model.pkl")
 print("- tfidf_vectorizer.pkl")
+print("- model_metrics.json")
