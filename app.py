@@ -1,14 +1,16 @@
 import streamlit as st
 import pandas as pd
-import pickle
 import re
 import nltk
 
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
+from sklearn.model_selection import train_test_split
 
 # ===============================
-# KONFIGURASI HALAMAN
+# PAGE CONFIG
 # ===============================
 st.set_page_config(
     page_title="Dashboard Analisis Sentimen SVM",
@@ -17,35 +19,26 @@ st.set_page_config(
 )
 
 # ===============================
-# DOWNLOAD NLTK (STREAMLIT SAFE)
+# NLTK
 # ===============================
 nltk.download("punkt")
 nltk.download("stopwords")
 
-stopwords_id = set(stopwords.words("indonesian"))
-stopwords_en = set(stopwords.words("english"))
-stopwords_all = stopwords_id.union(stopwords_en)
+stop_id = set(stopwords.words("indonesian"))
+stop_en = set(stopwords.words("english"))
+stop_all = stop_id.union(stop_en)
 
 # ===============================
-# LOAD MODEL & DATA
+# LOAD DATA
 # ===============================
-@st.cache_resource
-def load_model():
-    with open("svm_model.pkl", "rb") as f:
-        model = pickle.load(f)
-    with open("tfidf_vectorizer.pkl", "rb") as f:
-        vectorizer = pickle.load(f)
-    return model, vectorizer
-
 @st.cache_data
 def load_data():
     return pd.read_csv("dataset_berlabel.csv")
 
-model, vectorizer = load_model()
 df = load_data()
 
 # ===============================
-# PREPROCESS FUNCTION
+# PREPROCESS
 # ===============================
 def clean_text(text):
     text = str(text).lower()
@@ -54,94 +47,91 @@ def clean_text(text):
     text = re.sub(r"#\w+", "", text)
     text = re.sub(r"[^a-zA-Z\s]", "", text)
     tokens = word_tokenize(text)
-    tokens = [t for t in tokens if t not in stopwords_all]
+    tokens = [t for t in tokens if t not in stop_all]
     return " ".join(tokens)
 
+df["clean_text"] = df["text"].apply(clean_text)
+
 # ===============================
-# JUDUL
+# TRAIN SVM
+# ===============================
+@st.cache_resource
+def train_model(data):
+    X = data["clean_text"]
+    y = data["sentiment"]
+
+    vectorizer = TfidfVectorizer(max_features=5000)
+    X_vec = vectorizer.fit_transform(X)
+
+    model = LinearSVC()
+    model.fit(X_vec, y)
+
+    return model, vectorizer
+
+model, vectorizer = train_model(df)
+
+# ===============================
+# TITLE
 # ===============================
 st.title("📊 Dashboard Analisis Sentimen Twitter (SVM)")
-st.markdown("""
-Aplikasi ini menggunakan **Support Vector Machine (SVM)**  
-untuk menganalisis sentimen tweet **Bahasa Indonesia & Inggris**.
-""")
+st.markdown("Bahasa **Indonesia & Inggris** menggunakan **Support Vector Machine**")
 
 # ===============================
-# METRIC SENTIMEN
+# METRICS
 # ===============================
-st.subheader("📈 Ringkasan Data Sentimen")
-
 col1, col2, col3 = st.columns(3)
-
 col1.metric("Total Data", len(df))
 col2.metric("Positive", (df["sentiment"] == "positive").sum())
 col3.metric("Negative", (df["sentiment"] == "negative").sum())
 
 # ===============================
-# INPUT TWEET
+# INPUT
 # ===============================
-st.subheader("📝 Masukkan Teks Tweet")
-
-st.markdown("**📌 Contoh Tweet:**")
+st.subheader("📝 Analisis Tweet")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("🇮🇩 **Bahasa Indonesia**")
-    contoh_id = "Pelayanan aplikasi ini sangat buruk dan membuat saya kecewa."
+    contoh_id = "Pelayanan aplikasi ini sangat buruk dan mengecewakan."
+    st.markdown("🇮🇩 **Indonesia**")
     st.code(contoh_id)
-
-    if st.button("Gunakan Contoh Indonesia"):
-        st.session_state["tweet_input"] = contoh_id
+    if st.button("Gunakan Contoh ID"):
+        st.session_state["tweet"] = contoh_id
 
 with col2:
-    st.markdown("🇬🇧 **English**")
     contoh_en = "I really love this application, it works perfectly!"
+    st.markdown("🇬🇧 **English**")
     st.code(contoh_en)
-
     if st.button("Use English Example"):
-        st.session_state["tweet_input"] = contoh_en
+        st.session_state["tweet"] = contoh_en
 
-user_input = st.text_area(
-    "Tulis tweet di sini:",
-    height=120,
-    key="tweet_input",
-    placeholder="Contoh: I really love this new technology!"
+tweet = st.text_area(
+    "Masukkan tweet:",
+    key="tweet",
+    height=120
 )
 
 # ===============================
-# PREDIKSI
+# PREDICT
 # ===============================
 if st.button("🔍 Prediksi Sentimen"):
-    if user_input.strip() == "":
-        st.warning("⚠️ Masukkan teks tweet terlebih dahulu.")
+    if tweet.strip() == "":
+        st.warning("Masukkan teks terlebih dahulu")
     else:
-        clean = clean_text(user_input)
-        vector = vectorizer.transform([clean])
-        prediction = model.predict(vector)[0]
+        clean = clean_text(tweet)
+        vec = vectorizer.transform([clean])
+        pred = model.predict(vec)[0]
 
-        if prediction == "positive":
-            st.success("✅ Sentimen: POSITIVE")
+        if pred == "positive":
+            st.success("✅ Sentimen POSITIVE")
         else:
-            st.error("❌ Sentimen: NEGATIVE")
+            st.error("❌ Sentimen NEGATIVE")
 
 # ===============================
-# CONTOH DATASET
+# SAMPLE DATA
 # ===============================
-st.subheader("📄 Contoh Data Hasil Preprocessing")
+st.subheader("📄 Contoh Dataset")
+st.dataframe(df.sample(5)[["text", "sentiment"]])
 
-sample_df = df.sample(
-    min(5, len(df)), random_state=42
-)[["text", "sentiment"]]
-
-st.dataframe(sample_df)
-
-# ===============================
-# FOOTER
-# ===============================
 st.markdown("---")
-st.markdown(
-    "📌 **Metode:** Support Vector Machine (SVM) | "
-    "📂 Data: Twitter (X) | "
-    "🎓 Teknik Informatika"
-)
+st.markdown("📌 **Metode:** SVM | Data: Twitter (X)")
