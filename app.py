@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import nltk
+import re
+from collections import Counter
 
 from nltk.corpus import stopwords
 
 # ===============================
-# Download NLTK stopwords
+# NLTK setup
 # ===============================
 nltk.download("stopwords")
 
@@ -15,33 +16,22 @@ stopwords_en = set(stopwords.words("english"))
 all_stopwords = stopwords_id.union(stopwords_en)
 
 # ===============================
-# Load model & vectorizer (opsional, tetap boleh ada)
-# ===============================
-@st.cache_resource
-def load_model():
-    model = joblib.load("svm_model.pkl")
-    vectorizer = joblib.load("tfidf_vectorizer.pkl")
-    return model, vectorizer
-
-model, vectorizer = load_model()
-
-# ===============================
-# Streamlit UI
+# Streamlit config
 # ===============================
 st.set_page_config(
-    page_title="Analisis Sentimen Twitter (SVM)",
-    layout="centered"
+    page_title="Dashboard Analisis Sentimen Twitter (SVM)",
+    layout="wide"
 )
 
-st.title("📊 Analisis Sentimen Twitter")
+st.title("📊 Dashboard Analisis Sentimen Twitter")
 st.write(
     "Dashboard ini menampilkan hasil **analisis sentimen Twitter** "
-    "menggunakan **Support Vector Machine (SVM)** "
-    "pada tweet berbahasa **Indonesia dan Inggris**."
+    "menggunakan **Support Vector Machine (SVM)** berbasis **TF-IDF**. "
+    "Fokus utama dashboard adalah **eksplorasi dataset dan hasil klasifikasi**."
 )
 
 # ===============================
-# Load Dataset
+# Load dataset
 # ===============================
 @st.cache_data
 def load_dataset():
@@ -50,14 +40,41 @@ def load_dataset():
 df = load_dataset()
 
 # ===============================
-# Dataset Preview
+# Pre-check kolom
 # ===============================
-st.subheader("📂 Contoh Data Tweet")
+required_cols = {"clean_text", "sentiment"}
+if not required_cols.issubset(df.columns):
+    st.error("Dataset tidak memiliki kolom yang dibutuhkan.")
+    st.stop()
+
+# ===============================
+# RINGKASAN DATASET
+# ===============================
+st.subheader("📌 Ringkasan Dataset")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Total Tweet", len(df))
+col2.metric("Positive", (df["sentiment"] == "positive").sum())
+col3.metric("Negative", (df["sentiment"] == "negative").sum())
+
+# ===============================
+# DISTRIBUSI SENTIMEN
+# ===============================
+st.subheader("📈 Distribusi Sentimen")
+
+sentiment_count = df["sentiment"].value_counts()
+st.bar_chart(sentiment_count)
+
+# ===============================
+# CONTOH DATA ACAK
+# ===============================
+st.subheader("📂 Contoh Tweet (Random)")
 
 sample_size = st.slider(
-    "Jumlah contoh data:",
+    "Jumlah contoh tweet:",
     min_value=5,
-    max_value=50,
+    max_value=30,
     value=10
 )
 
@@ -76,18 +93,76 @@ st.dataframe(
 )
 
 # ===============================
-# Statistik Sentimen
+# CONTOH TWEET PER SENTIMEN
 # ===============================
-st.subheader("📈 Distribusi Sentimen Dataset")
+st.subheader("🧪 Contoh Tweet Berdasarkan Sentimen")
 
-sentiment_count = df["sentiment"].value_counts()
-st.bar_chart(sentiment_count)
+col_pos, col_neg = st.columns(2)
+
+with col_pos:
+    st.markdown("### 😊 Positive")
+    df_pos = df[df["sentiment"] == "positive"]
+    if len(df_pos) > 0:
+        st.dataframe(
+            df_pos.sample(min(5, len(df_pos)), random_state=1)[["clean_text"]],
+            use_container_width=True
+        )
+
+with col_neg:
+    st.markdown("### 😡 Negative")
+    df_neg = df[df["sentiment"] == "negative"]
+    if len(df_neg) > 0:
+        st.dataframe(
+            df_neg.sample(min(5, len(df_neg)), random_state=1)[["clean_text"]],
+            use_container_width=True
+        )
 
 # ===============================
-# Footer
+# PANJANG TWEET (EDA)
+# ===============================
+st.subheader("📏 Analisis Panjang Tweet")
+
+df["tweet_length"] = df["clean_text"].astype(str).apply(len)
+
+col_len1, col_len2 = st.columns(2)
+
+col_len1.metric(
+    "Rata-rata Panjang Tweet",
+    f"{df['tweet_length'].mean():.1f} karakter"
+)
+
+col_len2.metric(
+    "Tweet Terpanjang",
+    f"{df['tweet_length'].max()} karakter"
+)
+
+st.bar_chart(
+    df["tweet_length"].value_counts().sort_index().head(50)
+)
+
+# ===============================
+# TOP KATA PALING SERING MUNCUL
+# ===============================
+st.subheader("🔤 Top 15 Kata Paling Sering Muncul")
+
+def get_top_words(text_series, n=15):
+    words = []
+    for text in text_series.dropna():
+        tokens = text.split()
+        tokens = [t for t in tokens if t not in all_stopwords and len(t) > 3]
+        words.extend(tokens)
+    return Counter(words).most_common(n)
+
+top_words = get_top_words(df["clean_text"])
+
+top_df = pd.DataFrame(top_words, columns=["Kata", "Frekuensi"])
+st.dataframe(top_df, use_container_width=True)
+
+# ===============================
+# FOOTER
 # ===============================
 st.markdown("---")
 st.caption(
-    "📌 Metode: Support Vector Machine (SVM) | "
-    "TF-IDF | Dataset Twitter Bahasa Indonesia & Inggris"
+    "📌 Metode: Support Vector Machine (SVM) | TF-IDF | "
+    "Analisis Sentimen Twitter | Dashboard Sempro"
 )
