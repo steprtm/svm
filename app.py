@@ -1,117 +1,147 @@
 import streamlit as st
 import pandas as pd
-import joblib
-import matplotlib.pyplot as plt
+import pickle
+import re
+import nltk
 
-# =========================
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
+# ===============================
 # KONFIGURASI HALAMAN
-# =========================
+# ===============================
 st.set_page_config(
-    page_title="Dashboard Analisis Sentimen X",
+    page_title="Dashboard Analisis Sentimen SVM",
+    page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 Dashboard Analisis Sentimen Publik di Platform X")
-st.markdown("""
-Analisis sentimen publik terhadap isu **Donald Trump dan Greenland**
-menggunakan metode **Support Vector Machine (SVM)**.
-""")
+# ===============================
+# DOWNLOAD NLTK (STREAMLIT SAFE)
+# ===============================
+nltk.download("punkt")
+nltk.download("stopwords")
 
-# =========================
-# LOAD DATA & MODEL
-# =========================
+stopwords_id = set(stopwords.words("indonesian"))
+stopwords_en = set(stopwords.words("english"))
+stopwords_all = stopwords_id.union(stopwords_en)
+
+# ===============================
+# LOAD MODEL & DATA
+# ===============================
+@st.cache_resource
+def load_model():
+    with open("svm_model.pkl", "rb") as f:
+        model = pickle.load(f)
+    with open("tfidf_vectorizer.pkl", "rb") as f:
+        vectorizer = pickle.load(f)
+    return model, vectorizer
+
 @st.cache_data
 def load_data():
     return pd.read_csv("dataset_berlabel.csv")
 
-@st.cache_resource
-def load_model():
-    model = joblib.load("svm_model.pkl")
-    vectorizer = joblib.load("tfidf_vectorizer.pkl")
-    return model, vectorizer
-
-df = load_data()
 model, vectorizer = load_model()
+df = load_data()
 
-# =========================
-# SIDEBAR
-# =========================
-st.sidebar.header("🔧 Pengaturan")
-show_raw = st.sidebar.checkbox("Tampilkan data mentah")
-sample_size = st.sidebar.slider("Jumlah sampel tweet", 10, 200, 50)
+# ===============================
+# PREPROCESS FUNCTION
+# ===============================
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"@\w+", "", text)
+    text = re.sub(r"#\w+", "", text)
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
+    tokens = word_tokenize(text)
+    tokens = [t for t in tokens if t not in stopwords_all]
+    return " ".join(tokens)
 
-# =========================
-# METRIC RINGKASAN
-# =========================
+# ===============================
+# JUDUL
+# ===============================
+st.title("📊 Dashboard Analisis Sentimen Twitter (SVM)")
+st.markdown("""
+Aplikasi ini menggunakan **Support Vector Machine (SVM)**  
+untuk menganalisis sentimen tweet **Bahasa Indonesia & Inggris**.
+""")
+
+# ===============================
+# METRIC SENTIMEN
+# ===============================
+st.subheader("📈 Ringkasan Data Sentimen")
+
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Total Tweet", len(df))
-col2.metric("Sentimen Positif", (df["sentiment"] == "positive").sum())
-col3.metric("Sentimen Negatif", (df["sentiment"] == "negative").sum())
+col1.metric("Total Data", len(df))
+col2.metric("Positive", (df["sentiment"] == "positive").sum())
+col3.metric("Negative", (df["sentiment"] == "negative").sum())
 
-# =========================
-# VISUALISASI DISTRIBUSI
-# =========================
-st.subheader("📈 Distribusi Sentimen")
+# ===============================
+# INPUT TWEET
+# ===============================
+st.subheader("📝 Masukkan Teks Tweet")
 
-sentiment_count = df["sentiment"].value_counts()
+st.markdown("**📌 Contoh Tweet:**")
 
-fig, ax = plt.subplots()
-sentiment_count.plot(
-    kind="bar",
-    ax=ax
-)
-ax.set_xlabel("Sentimen")
-ax.set_ylabel("Jumlah Tweet")
-ax.set_title("Distribusi Sentimen Publik")
+col1, col2 = st.columns(2)
 
-st.pyplot(fig)
+with col1:
+    st.markdown("🇮🇩 **Bahasa Indonesia**")
+    contoh_id = "Pelayanan aplikasi ini sangat buruk dan membuat saya kecewa."
+    st.code(contoh_id)
 
-# =========================
-# TABEL DATA
-# =========================
-st.subheader("📝 Contoh Tweet")
+    if st.button("Gunakan Contoh Indonesia"):
+        st.session_state["tweet_input"] = contoh_id
 
-sample_df = df.sample(sample_size, random_state=42)[
-    ["text", "sentiment"]
-]
+with col2:
+    st.markdown("🇬🇧 **English**")
+    contoh_en = "I really love this application, it works perfectly!"
+    st.code(contoh_en)
 
-st.dataframe(sample_df, use_container_width=True)
-
-# =========================
-# OPSIONAL: DATA MENTAH
-# =========================
-if show_raw:
-    st.subheader("📂 Data Lengkap")
-    st.dataframe(df, use_container_width=True)
-
-# =========================
-# PREDIKSI TEKS BARU
-# =========================
-st.subheader("🔮 Uji Prediksi Sentimen")
+    if st.button("Use English Example"):
+        st.session_state["tweet_input"] = contoh_en
 
 user_input = st.text_area(
-    "Masukkan teks tweet (Bahasa Indonesia / Inggris):",
-    height=100
+    "Tulis tweet di sini:",
+    height=120,
+    key="tweet_input",
+    placeholder="Contoh: I really love this new technology!"
 )
 
-if st.button("Prediksi Sentimen"):
+# ===============================
+# PREDIKSI
+# ===============================
+if st.button("🔍 Prediksi Sentimen"):
     if user_input.strip() == "":
-        st.warning("Masukkan teks terlebih dahulu.")
+        st.warning("⚠️ Masukkan teks tweet terlebih dahulu.")
     else:
-        X_input = vectorizer.transform([user_input])
-        prediction = model.predict(X_input)[0]
+        clean = clean_text(user_input)
+        vector = vectorizer.transform([clean])
+        prediction = model.predict(vector)[0]
 
         if prediction == "positive":
-            st.success("✅ Sentimen: POSITIF")
+            st.success("✅ Sentimen: POSITIVE")
         else:
-            st.error("❌ Sentimen: NEGATIF")
+            st.error("❌ Sentimen: NEGATIVE")
 
-# =========================
+# ===============================
+# CONTOH DATASET
+# ===============================
+st.subheader("📄 Contoh Data Hasil Preprocessing")
+
+sample_df = df.sample(
+    min(5, len(df)), random_state=42
+)[["text", "sentiment"]]
+
+st.dataframe(sample_df)
+
+# ===============================
 # FOOTER
-# =========================
+# ===============================
 st.markdown("---")
-st.caption(
-    "Dashboard ini dikembangkan untuk keperluan Seminar Proposal "
-    "dengan fokus pada analisis metode Support Vector Machine (SVM)."
+st.markdown(
+    "📌 **Metode:** Support Vector Machine (SVM) | "
+    "📂 Data: Twitter (X) | "
+    "🎓 Teknik Informatika"
 )
