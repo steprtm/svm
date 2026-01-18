@@ -4,6 +4,7 @@ import nltk
 import re
 import json
 from collections import Counter
+import os  # === TAMBAHAN ===
 
 from nltk.corpus import stopwords
 
@@ -39,6 +40,21 @@ def load_dataset():
     return pd.read_csv("dataset_berlabel.csv")
 
 df = load_dataset()
+
+# ===============================
+# NORMALISASI LABEL SENTIMEN (TAMBAHAN PENTING)
+# ===============================
+df["sentiment"] = (
+    df["sentiment"]
+    .astype(str)
+    .str.lower()
+    .str.strip()
+)
+
+# ===============================
+# DEBUG OPSIONAL (AMAN)
+# ===============================
+st.caption(f"Label sentimen terdeteksi: {df['sentiment'].unique()}")
 
 # ===============================
 # Pre-check kolom
@@ -156,18 +172,28 @@ st.bar_chart(
 # ===============================
 st.subheader("🎯 Evaluasi Model SVM")
 
-with open("model_metrics.json") as f:
+# === PATH METRICS (DISESUAIKAN) ===
+metrics_path = "model_metrics.json"
+
+if not os.path.exists(metrics_path):
+    st.error("File model_metrics.json tidak ditemukan. Jalankan preprocess.py terlebih dahulu.")
+    st.stop()
+
+with open(metrics_path) as f:
     metrics = json.load(f)
 
-col1, col2, col3 = st.columns(3)
+# === TAMBAHAN F1-SCORE ===
+col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Accuracy", f"{metrics['accuracy']*100:.0f}%")
-col2.metric("Precision (Avg)", "70%")
-col3.metric("Recall (Avg)", "70%")
+col1.metric("Accuracy", f"{metrics['accuracy']*100:.2f}%")
+col2.metric("Precision (Avg)", f"{metrics['precision']*100:.2f}%")
+col3.metric("Recall (Avg)", f"{metrics['recall']*100:.2f}%")
+col4.metric("F1-Score (Avg)", f"{metrics['f1_score']*100:.2f}%")
 
 st.info(
-    "Akurasi diperoleh dari data uji (test set) menggunakan "
-    "Support Vector Machine (SVM) dengan representasi TF-IDF."
+    "Evaluasi model dilakukan menggunakan data uji (test set) "
+    "dengan metrik Accuracy, Precision, Recall, dan F1-score (macro average) "
+    "menggunakan metode Support Vector Machine (SVM) berbasis TF-IDF."
 )
 
 # ===============================
@@ -194,5 +220,5 @@ st.dataframe(top_df, use_container_width=True)
 st.markdown("---")
 st.caption(
     "📌 Metode: Support Vector Machine (SVM) | TF-IDF | "
-    "Analisis Sentimen Twitter | Dashboard Sempro"
+    "Analisis Sentimen Twitter | Dashboard Seminar Proposal"
 )
