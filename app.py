@@ -1,134 +1,147 @@
 import streamlit as st
 import pandas as pd
-import joblib
+import pickle
 import re
 import nltk
 
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
+from nltk.tokenize import word_tokenize
 
 # ===============================
-# Download NLTK stopwords
+# KONFIGURASI HALAMAN
 # ===============================
+st.set_page_config(
+    page_title="Dashboard Analisis Sentimen SVM",
+    page_icon="📊",
+    layout="wide"
+)
+
+# ===============================
+# DOWNLOAD NLTK (STREAMLIT SAFE)
+# ===============================
+nltk.download("punkt")
 nltk.download("stopwords")
 
 stopwords_id = set(stopwords.words("indonesian"))
 stopwords_en = set(stopwords.words("english"))
-all_stopwords = stopwords_id.union(stopwords_en)
+stopwords_all = stopwords_id.union(stopwords_en)
 
 # ===============================
-# Load model & vectorizer
+# LOAD MODEL & DATA
 # ===============================
 @st.cache_resource
 def load_model():
-    model = joblib.load("svm_model.pkl")
-    vectorizer = joblib.load("tfidf_vectorizer.pkl")
+    with open("svm_model.pkl", "rb") as f:
+        model = pickle.load(f)
+    with open("tfidf_vectorizer.pkl", "rb") as f:
+        vectorizer = pickle.load(f)
     return model, vectorizer
 
+@st.cache_data
+def load_data():
+    return pd.read_csv("dataset_berlabel.csv")
+
 model, vectorizer = load_model()
+df = load_data()
 
 # ===============================
-# Text preprocessing (SAMA dgn training)
+# PREPROCESS FUNCTION
 # ===============================
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(r"http\S+|www\S+", "", text)
-    text = re.sub(r"@\w+|#\w+", "", text)
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"@\w+", "", text)
+    text = re.sub(r"#\w+", "", text)
     text = re.sub(r"[^a-zA-Z\s]", "", text)
-    tokens = text.split()
-    tokens = [t for t in tokens if t not in all_stopwords]
+    tokens = word_tokenize(text)
+    tokens = [t for t in tokens if t not in stopwords_all]
     return " ".join(tokens)
 
 # ===============================
-# Streamlit UI
+# JUDUL
 # ===============================
-st.set_page_config(
-    page_title="Analisis Sentimen Twitter (SVM)",
-    layout="centered"
-)
-
-st.title("📊 Analisis Sentimen Twitter")
-st.write(
-    "Aplikasi ini menggunakan **Support Vector Machine (SVM)** "
-    "untuk mengklasifikasikan sentimen tweet berbahasa "
-    "**Indonesia dan Inggris**."
-)
+st.title("📊 Dashboard Analisis Sentimen Twitter (SVM)")
+st.markdown("""
+Aplikasi ini menggunakan **Support Vector Machine (SVM)**  
+untuk menganalisis sentimen tweet **Bahasa Indonesia & Inggris**.
+""")
 
 # ===============================
-# Input Text
+# METRIC SENTIMEN
+# ===============================
+st.subheader("📈 Ringkasan Data Sentimen")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Total Data", len(df))
+col2.metric("Positive", (df["sentiment"] == "positive").sum())
+col3.metric("Negative", (df["sentiment"] == "negative").sum())
+
+# ===============================
+# INPUT TWEET
 # ===============================
 st.subheader("📝 Masukkan Teks Tweet")
+
+st.markdown("**📌 Contoh Tweet:**")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("🇮🇩 **Bahasa Indonesia**")
+    contoh_id = "Pelayanan aplikasi ini sangat buruk dan membuat saya kecewa."
+    st.code(contoh_id)
+
+    if st.button("Gunakan Contoh Indonesia"):
+        st.session_state["tweet_input"] = contoh_id
+
+with col2:
+    st.markdown("🇬🇧 **English**")
+    contoh_en = "I really love this application, it works perfectly!"
+    st.code(contoh_en)
+
+    if st.button("Use English Example"):
+        st.session_state["tweet_input"] = contoh_en
 
 user_input = st.text_area(
     "Tulis tweet di sini:",
     height=120,
+    key="tweet_input",
     placeholder="Contoh: I really love this new technology!"
 )
 
+# ===============================
+# PREDIKSI
+# ===============================
 if st.button("🔍 Prediksi Sentimen"):
     if user_input.strip() == "":
-        st.warning("⚠️ Teks tidak boleh kosong.")
+        st.warning("⚠️ Masukkan teks tweet terlebih dahulu.")
     else:
-        clean_input = preprocess_text(user_input)
-        vectorized_input = vectorizer.transform([clean_input])
-        prediction = model.predict(vectorized_input)[0]
+        clean = clean_text(user_input)
+        vector = vectorizer.transform([clean])
+        prediction = model.predict(vector)[0]
 
         if prediction == "positive":
             st.success("✅ Sentimen: POSITIVE")
-        elif prediction == "negative":
-            st.error("❌ Sentimen: NEGATIVE")
         else:
-            st.info("⚖️ Sentimen: NEUTRAL")
+            st.error("❌ Sentimen: NEGATIVE")
 
 # ===============================
-# Load Dataset
+# CONTOH DATASET
 # ===============================
-@st.cache_data
-def load_dataset():
-    return pd.read_csv("dataset_berlabel.csv")
+st.subheader("📄 Contoh Data Hasil Preprocessing")
 
-df = load_dataset()
+sample_df = df.sample(
+    min(5, len(df)), random_state=42
+)[["text", "sentiment"]]
 
-# ===============================
-# Dataset Preview
-# ===============================
-st.subheader("📂 Contoh Data Tweet")
-
-sample_size = st.slider(
-    "Jumlah contoh data:",
-    min_value=5,
-    max_value=50,
-    value=10
-)
-
-sample_df = df.sample(sample_size, random_state=42)[
-    ["clean_text", "sentiment"]
-]
-
-st.dataframe(
-    sample_df.rename(
-        columns={
-            "clean_text": "Tweet (Hasil Preprocessing)",
-            "sentiment": "Sentimen"
-        }
-    ),
-    use_container_width=True
-)
+st.dataframe(sample_df)
 
 # ===============================
-# Statistik Sentimen
-# ===============================
-st.subheader("📈 Distribusi Sentimen Dataset")
-
-sentiment_count = df["sentiment"].value_counts()
-
-st.bar_chart(sentiment_count)
-
-# ===============================
-# Footer
+# FOOTER
 # ===============================
 st.markdown("---")
-st.caption(
-    "📌 Model: Support Vector Machine (SVM) | "
-    "TF-IDF | Bahasa Indonesia & Inggris"
+st.markdown(
+    "📌 **Metode:** Support Vector Machine (SVM) | "
+    "📂 Data: Twitter (X) | "
+    "🎓 Teknik Informatika"
 )
