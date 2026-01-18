@@ -1,6 +1,6 @@
 # ================================
 # PREPROCESS + SENTIMENT LABELING
-# ID + EN USING SVM
+# ID + EN | 3 KELAS (POS, NEG, NEU)
 # ================================
 
 import pandas as pd
@@ -26,16 +26,16 @@ nltk.download("stopwords")
 # ================================
 df = pd.read_csv(r"C:\sempro\dataset\dataraw.csv")
 
-# Gunakan kolom teks yang benar
+# Pastikan kolom teks benar
 df = df.rename(columns={"full_text": "text"})
 
-# Filter bahasa Indonesia & Inggris
+# Ambil hanya ID & EN
 df = df[df["lang"].isin(["id", "en"])]
 
-# Drop data kosong
+# Drop kosong
 df = df.dropna(subset=["text"])
 
-print("Jumlah data ID + EN:", len(df))
+print("Jumlah data awal:", len(df))
 
 # ================================
 # STOPWORDS
@@ -49,6 +49,7 @@ stop_en = set(stopwords.words("english"))
 def clean_text(text, lang):
     text = text.lower()
     text = re.sub(r"http\S+|www\S+", "", text)
+    text = re.sub(r"@\w+|#\w+", "", text)
     text = re.sub(r"[^a-zA-Z\s]", "", text)
 
     tokens = text.split()
@@ -74,6 +75,7 @@ lexicon_id = {
     "bagus": 1,
     "baik": 1,
     "senang": 1,
+    "suka": 1,
     "buruk": -1,
     "jelek": -1,
     "benci": -1,
@@ -86,9 +88,9 @@ def label_sentiment(text, lang):
     else:
         score = analyzer.polarity_scores(text)["compound"]
 
-    if score > 0:
+    if score > 0.05:
         return "positive"
-    elif score < 0:
+    elif score < -0.05:
         return "negative"
     else:
         return "neutral"
@@ -97,13 +99,8 @@ df["sentiment"] = df.apply(
     lambda x: label_sentiment(x["clean_text"], x["lang"]), axis=1
 )
 
+print("\nDistribusi sentimen:")
 print(df["sentiment"].value_counts())
-
-# ================================
-# DROP NEUTRAL (AGAR SVM AMAN)
-# ================================
-df = df[df["sentiment"] != "neutral"]
-print("Jumlah data setelah drop neutral:", len(df))
 
 # ================================
 # TF-IDF VECTOR
@@ -122,11 +119,15 @@ X_tfidf = vectorizer.fit_transform(X)
 # TRAIN TEST SPLIT
 # ================================
 X_train, X_test, y_train, y_test = train_test_split(
-    X_tfidf, y, test_size=0.2, random_state=42
+    X_tfidf,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
 )
 
 # ================================
-# TRAIN SVM
+# TRAIN SVM (MULTICLASS)
 # ================================
 model = LinearSVC()
 model.fit(X_train, y_train)
@@ -135,6 +136,7 @@ model.fit(X_train, y_train)
 # EVALUATION
 # ================================
 y_pred = model.predict(X_test)
+
 print("\nClassification Report:\n")
 print(classification_report(y_test, y_pred))
 
@@ -142,8 +144,9 @@ print(classification_report(y_test, y_pred))
 # SAVE OUTPUT
 # ================================
 df.to_csv("dataset_berlabel.csv", index=False)
-joblib.dump(model, "svm_model.pkl")
-joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
+joblib.dump(model, r"C:\sempro\dataset\svm_model.pkl")
+joblib.dump(vectorizer, r"C:\sempro\dataset\tfidf_vectorizer.pkl")
+df.to_csv(r"C:\sempro\dataset\dataset_berlabel.csv", index=False)
 
 print("\nPreprocessing selesai.")
 print("File tersimpan:")
