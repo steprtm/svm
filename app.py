@@ -73,7 +73,7 @@ st.pyplot(fig)
 st.subheader("📝 Contoh Tweet")
 
 sample_df = df.sample(sample_size, random_state=42)[
-    ["full_text", "sentiment"]
+    ["text", "sentiment"]
 ]
 
 st.dataframe(sample_df, use_container_width=True)
