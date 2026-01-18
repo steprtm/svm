@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import re
 import nltk
 
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 # ===============================
 # Download NLTK stopwords
@@ -17,7 +15,7 @@ stopwords_en = set(stopwords.words("english"))
 all_stopwords = stopwords_id.union(stopwords_en)
 
 # ===============================
-# Load model & vectorizer
+# Load model & vectorizer (opsional, tetap boleh ada)
 # ===============================
 @st.cache_resource
 def load_model():
@@ -26,18 +24,6 @@ def load_model():
     return model, vectorizer
 
 model, vectorizer = load_model()
-
-# ===============================
-# Text preprocessing (SAMA dgn training)
-# ===============================
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(r"http\S+|www\S+", "", text)
-    text = re.sub(r"@\w+|#\w+", "", text)
-    text = re.sub(r"[^a-zA-Z\s]", "", text)
-    tokens = text.split()
-    tokens = [t for t in tokens if t not in all_stopwords]
-    return " ".join(tokens)
 
 # ===============================
 # Streamlit UI
@@ -49,36 +35,10 @@ st.set_page_config(
 
 st.title("📊 Analisis Sentimen Twitter")
 st.write(
-    "Aplikasi ini menggunakan **Support Vector Machine (SVM)** "
-    "untuk mengklasifikasikan sentimen tweet berbahasa "
-    "**Indonesia dan Inggris**."
+    "Dashboard ini menampilkan hasil **analisis sentimen Twitter** "
+    "menggunakan **Support Vector Machine (SVM)** "
+    "pada tweet berbahasa **Indonesia dan Inggris**."
 )
-
-# ===============================
-# Input Text
-# ===============================
-st.subheader("📝 Masukkan Teks Tweet")
-
-user_input = st.text_area(
-    "Tulis tweet di sini:",
-    height=120,
-    placeholder="Contoh: I really love this new technology!"
-)
-
-if st.button("🔍 Prediksi Sentimen"):
-    if user_input.strip() == "":
-        st.warning("⚠️ Teks tidak boleh kosong.")
-    else:
-        clean_input = preprocess_text(user_input)
-        vectorized_input = vectorizer.transform([clean_input])
-        prediction = model.predict(vectorized_input)[0]
-
-        if prediction == "positive":
-            st.success("✅ Sentimen: POSITIVE")
-        elif prediction == "negative":
-            st.error("❌ Sentimen: NEGATIVE")
-        else:
-            st.info("⚖️ Sentimen: NEUTRAL")
 
 # ===============================
 # Load Dataset
@@ -121,7 +81,6 @@ st.dataframe(
 st.subheader("📈 Distribusi Sentimen Dataset")
 
 sentiment_count = df["sentiment"].value_counts()
-
 st.bar_chart(sentiment_count)
 
 # ===============================
@@ -129,6 +88,6 @@ st.bar_chart(sentiment_count)
 # ===============================
 st.markdown("---")
 st.caption(
-    "📌 Model: Support Vector Machine (SVM) | "
-    "TF-IDF | Bahasa Indonesia & Inggris"
+    "📌 Metode: Support Vector Machine (SVM) | "
+    "TF-IDF | Dataset Twitter Bahasa Indonesia & Inggris"
 )
