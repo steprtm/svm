@@ -7,7 +7,7 @@ import nltk
 from nltk.corpus import stopwords
 
 # ===============================
-# Streamlit Page Config
+# Page Config
 # ===============================
 st.set_page_config(
     page_title="Analisis Sentimen Twitter (SVM)",
@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ===============================
-# Download NLTK Stopwords (SAFE)
+# Download stopwords
 # ===============================
 nltk.download("stopwords")
 
@@ -24,7 +24,7 @@ stopwords_en = set(stopwords.words("english"))
 all_stopwords = stopwords_id.union(stopwords_en)
 
 # ===============================
-# Load Model & Vectorizer
+# Load Model
 # ===============================
 @st.cache_resource
 def load_model():
@@ -35,8 +35,7 @@ def load_model():
 model, vectorizer = load_model()
 
 # ===============================
-# Text Preprocessing
-# (HARUS sama dengan training)
+# Preprocessing
 # ===============================
 def preprocess_text(text):
     text = text.lower()
@@ -48,7 +47,7 @@ def preprocess_text(text):
     return " ".join(tokens)
 
 # ===============================
-# UI - Header
+# UI
 # ===============================
 st.title("📊 Analisis Sentimen Twitter")
 st.write(
@@ -65,20 +64,20 @@ st.subheader("📝 Masukkan Teks Tweet")
 user_input = st.text_area(
     "Tulis tweet di sini:",
     height=120,
-    placeholder="Contoh: I really love this new technology!"
+    placeholder="Contoh: I really love this policy!"
 )
 
 if st.button("🔍 Prediksi Sentimen"):
     if user_input.strip() == "":
         st.warning("⚠️ Teks tidak boleh kosong.")
     else:
-        clean_text = preprocess_text(user_input)
-        vectorized = vectorizer.transform([clean_text])
-        prediction = model.predict(vectorized)[0]
+        clean = preprocess_text(user_input)
+        vec = vectorizer.transform([clean])
+        pred = model.predict(vec)[0]
 
-        if prediction == "positive":
+        if pred == "positive":
             st.success("✅ Sentimen: POSITIVE")
-        elif prediction == "negative":
+        elif pred == "negative":
             st.error("❌ Sentimen: NEGATIVE")
         else:
             st.info("⚖️ Sentimen: NEUTRAL")
@@ -93,60 +92,68 @@ def load_dataset():
 df = load_dataset()
 
 # ===============================
-# Contoh Tweet per Bahasa
+# Contoh Tweet ID & EN (TANPA KOLOM LANGUAGE)
 # ===============================
-st.subheader("📂 Contoh Tweet Berdasarkan Bahasa")
+st.subheader("📂 Contoh Tweet")
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("### 🇮🇩 Bahasa Indonesia")
-    df_id = df[df["language"] == "id"]
 
-    if len(df_id) > 0:
-        sample_id = df_id.sample(
-            min(5, len(df_id)),
-            random_state=42
-        )[["clean_text", "sentiment"]]
-
-        st.dataframe(
-            sample_id.rename(
-                columns={
-                    "clean_text": "Tweet",
-                    "sentiment": "Sentimen"
-                }
-            ),
-            use_container_width=True
+    df_id = df[
+        df["clean_text"].str.contains(
+            r"\b(yang|dan|tidak|ini|itu|saya|kami)\b",
+            case=False,
+            na=False
         )
-    else:
-        st.info("Tidak ada data Bahasa Indonesia.")
+    ]
+
+    sample_id = df_id.sample(
+        min(5, len(df_id)),
+        random_state=42
+    )[["clean_text", "sentiment"]]
+
+    st.dataframe(
+        sample_id.rename(
+            columns={
+                "clean_text": "Tweet",
+                "sentiment": "Sentimen"
+            }
+        ),
+        use_container_width=True
+    )
 
 with col2:
     st.markdown("### 🇬🇧 Bahasa Inggris")
-    df_en = df[df["language"] == "en"]
 
-    if len(df_en) > 0:
-        sample_en = df_en.sample(
-            min(5, len(df_en)),
-            random_state=42
-        )[["clean_text", "sentiment"]]
-
-        st.dataframe(
-            sample_en.rename(
-                columns={
-                    "clean_text": "Tweet",
-                    "sentiment": "Sentimen"
-                }
-            ),
-            use_container_width=True
+    df_en = df[
+        df["clean_text"].str.contains(
+            r"\b(the|and|is|are|this|that|i|we)\b",
+            case=False,
+            na=False
         )
-    else:
-        st.info("Tidak ada data Bahasa Inggris.")
+    ]
+
+    sample_en = df_en.sample(
+        min(5, len(df_en)),
+        random_state=42
+    )[["clean_text", "sentiment"]]
+
+    st.dataframe(
+        sample_en.rename(
+            columns={
+                "clean_text": "Tweet",
+                "sentiment": "Sentimen"
+            }
+        ),
+        use_container_width=True
+    )
 
 # ===============================
 # Distribusi Sentimen
 # ===============================
-st.subheader("📈 Distribusi Sentimen Dataset")
+st.subheader("📈 Distribusi Sentimen")
 
 sentiment_count = df["sentiment"].value_counts()
 st.bar_chart(sentiment_count)
@@ -157,5 +164,5 @@ st.bar_chart(sentiment_count)
 st.markdown("---")
 st.caption(
     "📌 Model: Support Vector Machine (SVM) | TF-IDF | "
-    "Multibahasa (Indonesia & Inggris)"
+    "Dataset Twitter Multibahasa"
 )
