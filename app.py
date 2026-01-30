@@ -5,6 +5,7 @@ import re
 import json
 import joblib
 import os
+import numpy as np
 from collections import Counter
 
 from nltk.corpus import stopwords
@@ -80,6 +81,14 @@ def preprocess_input(text):
     text = re.sub(r"[^a-zA-Z\s]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+# ===============================
+# DECISION SCORE → PERCENTAGE
+# ===============================
+def decision_to_percentages(decision_scores, classes):
+    exp_scores = np.exp(decision_scores - np.max(decision_scores))
+    probs = exp_scores / exp_scores.sum()
+    return dict(zip(classes, probs * 100))
 
 # ===============================
 # RINGKASAN DATASET
@@ -203,12 +212,6 @@ col2.metric("Precision (Avg)", f"{metrics['precision']*100:.2f}%")
 col3.metric("Recall (Avg)", f"{metrics['recall']*100:.2f}%")
 col4.metric("F1-Score (Avg)", f"{metrics['f1_score']*100:.2f}%")
 
-st.info(
-    "Evaluasi model dilakukan menggunakan data uji (test set) "
-    "dengan metrik Accuracy, Precision, Recall, dan F1-score "
-    "(macro average) menggunakan metode SVM berbasis TF-IDF."
-)
-
 # ===============================
 # TESTING SENTIMEN MANUAL
 # ===============================
@@ -226,14 +229,27 @@ if st.button("🔍 Prediksi Sentimen"):
     else:
         clean_input = preprocess_input(user_input)
         vectorized_input = tfidf_vectorizer.transform([clean_input])
-        prediction = svm_model.predict(vectorized_input)[0]
+
+        decision_scores = svm_model.decision_function(vectorized_input)[0]
+        classes = svm_model.classes_
+
+        percentages = decision_to_percentages(decision_scores, classes)
+        prediction = classes[np.argmax(decision_scores)]
+
+        st.subheader("📊 Hasil Prediksi Sentimen")
+
+        col_p, col_n, col_neu = st.columns(3)
+
+        col_p.metric("😊 Positif", f"{percentages.get('positive', 0):.2f}%")
+        col_n.metric("😡 Negatif", f"{percentages.get('negative', 0):.2f}%")
+        col_neu.metric("😐 Netral", f"{percentages.get('neutral', 0):.2f}%")
 
         if prediction == "positive":
-            st.success("😊 Sentimen: POSITIF")
+            st.success("😊 Sentimen Dominan: POSITIF")
         elif prediction == "negative":
-            st.error("😡 Sentimen: NEGATIF")
+            st.error("😡 Sentimen Dominan: NEGATIF")
         else:
-            st.info("😐 Sentimen: NETRAL")
+            st.info("😐 Sentimen Dominan: NETRAL")
 
         st.caption(f"Teks setelah preprocessing: `{clean_input}`")
 
