@@ -5,9 +5,7 @@ import re
 import json
 import joblib
 import os
-import numpy as np
 from collections import Counter
-
 from nltk.corpus import stopwords
 
 # ===============================
@@ -46,12 +44,7 @@ df = load_dataset()
 # ===============================
 # NORMALISASI LABEL
 # ===============================
-df["sentiment"] = (
-    df["sentiment"]
-    .astype(str)
-    .str.lower()
-    .str.strip()
-)
+df["sentiment"] = df["sentiment"].astype(str).str.lower().str.strip()
 
 # ===============================
 # VALIDASI KOLOM
@@ -83,24 +76,25 @@ def preprocess_input(text):
     return text
 
 # ===============================
-# DECISION SCORE → PERCENTAGE
-# ===============================
-def decision_to_percentages(decision_scores, classes):
-    exp_scores = np.exp(decision_scores - np.max(decision_scores))
-    probs = exp_scores / exp_scores.sum()
-    return dict(zip(classes, probs * 100))
-
-# ===============================
-# RINGKASAN DATASET
+# 📌 RINGKASAN DATASET + PERSENTASE
 # ===============================
 st.subheader("📌 Ringkasan Dataset")
 
+total = len(df)
+pos = (df["sentiment"] == "positive").sum()
+neg = (df["sentiment"] == "negative").sum()
+neu = (df["sentiment"] == "neutral").sum()
+
+pos_pct = (pos / total) * 100
+neg_pct = (neg / total) * 100
+neu_pct = (neu / total) * 100
+
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Total Tweet", len(df))
-col2.metric("Positive", (df["sentiment"] == "positive").sum())
-col3.metric("Negative", (df["sentiment"] == "negative").sum())
-col4.metric("Neutral", (df["sentiment"] == "neutral").sum())
+col1.metric("Total Tweet", total)
+col2.metric("Positive", f"{pos} ({pos_pct:.2f}%)")
+col3.metric("Negative", f"{neg} ({neg_pct:.2f}%)")
+col4.metric("Neutral", f"{neu} ({neu_pct:.2f}%)")
 
 # ===============================
 # DISTRIBUSI SENTIMEN
@@ -113,12 +107,7 @@ st.bar_chart(df["sentiment"].value_counts())
 # ===============================
 st.subheader("📂 Contoh Tweet (Random)")
 
-sample_size = st.slider(
-    "Jumlah contoh tweet:",
-    min_value=5,
-    max_value=100,
-    value=10
-)
+sample_size = st.slider("Jumlah contoh tweet:", 5, 100, 10)
 
 sample_df = df.sample(sample_size, random_state=42)[
     ["clean_text", "sentiment"]
@@ -144,29 +133,17 @@ col_pos, col_neg, col_neu = st.columns(3)
 with col_pos:
     st.markdown("### 😊 Positive")
     df_pos = df[df["sentiment"] == "positive"]
-    if len(df_pos) > 0:
-        st.dataframe(
-            df_pos.sample(min(10, len(df_pos)), random_state=1)[["clean_text"]],
-            use_container_width=True
-        )
+    st.dataframe(df_pos.sample(min(10, len(df_pos)))[["clean_text"]])
 
 with col_neg:
     st.markdown("### 😡 Negative")
     df_neg = df[df["sentiment"] == "negative"]
-    if len(df_neg) > 0:
-        st.dataframe(
-            df_neg.sample(min(10, len(df_neg)), random_state=1)[["clean_text"]],
-            use_container_width=True
-        )
+    st.dataframe(df_neg.sample(min(10, len(df_neg)))[["clean_text"]])
 
 with col_neu:
     st.markdown("### 😐 Neutral")
     df_neu = df[df["sentiment"] == "neutral"]
-    if len(df_neu) > 0:
-        st.dataframe(
-            df_neu.sample(min(10, len(df_neu)), random_state=1)[["clean_text"]],
-            use_container_width=True
-        )
+    st.dataframe(df_neu.sample(min(10, len(df_neu)))[["clean_text"]])
 
 # ===============================
 # ANALISIS PANJANG TWEET
@@ -176,20 +153,8 @@ st.subheader("📏 Analisis Panjang Tweet")
 df["tweet_length"] = df["clean_text"].astype(str).apply(len)
 
 col_len1, col_len2 = st.columns(2)
-
-col_len1.metric(
-    "Rata-rata Panjang Tweet",
-    f"{df['tweet_length'].mean():.1f} karakter"
-)
-
-col_len2.metric(
-    "Tweet Terpanjang",
-    f"{df['tweet_length'].max()} karakter"
-)
-
-st.bar_chart(
-    df["tweet_length"].value_counts().sort_index().head(50)
-)
+col_len1.metric("Rata-rata Panjang Tweet", f"{df['tweet_length'].mean():.1f}")
+col_len2.metric("Tweet Terpanjang", df["tweet_length"].max())
 
 # ===============================
 # EVALUASI MODEL
@@ -197,85 +162,57 @@ st.bar_chart(
 st.subheader("🎯 Evaluasi Model SVM")
 
 metrics_path = "model_metrics.json"
-
-if not os.path.exists(metrics_path):
-    st.error("File model_metrics.json tidak ditemukan. Jalankan preprocess.py terlebih dahulu.")
-    st.stop()
-
 with open(metrics_path) as f:
     metrics = json.load(f)
 
 col1, col2, col3, col4 = st.columns(4)
-
 col1.metric("Accuracy", f"{metrics['accuracy']*100:.2f}%")
-col2.metric("Precision (Avg)", f"{metrics['precision']*100:.2f}%")
-col3.metric("Recall (Avg)", f"{metrics['recall']*100:.2f}%")
-col4.metric("F1-Score (Avg)", f"{metrics['f1_score']*100:.2f}%")
+col2.metric("Precision", f"{metrics['precision']*100:.2f}%")
+col3.metric("Recall", f"{metrics['recall']*100:.2f}%")
+col4.metric("F1-Score", f"{metrics['f1_score']*100:.2f}%")
 
 # ===============================
-# TESTING SENTIMEN MANUAL
+# 🧠 UJI SENTIMEN MANUAL + PERSENTASE
 # ===============================
 st.subheader("🧠 Uji Sentimen Teks Secara Langsung")
 
-user_input = st.text_area(
-    "Masukkan teks / tweet:",
-    placeholder="Contoh: Donald Trump comments on Greenland policy...",
-    height=120
-)
+user_input = st.text_area("Masukkan teks / tweet:", height=120)
 
 if st.button("🔍 Prediksi Sentimen"):
-    if user_input.strip() == "":
-        st.warning("Silakan masukkan teks terlebih dahulu.")
-    else:
-        clean_input = preprocess_input(user_input)
-        vectorized_input = tfidf_vectorizer.transform([clean_input])
+    clean_input = preprocess_input(user_input)
+    vector = tfidf_vectorizer.transform([clean_input])
 
-        decision_scores = svm_model.decision_function(vectorized_input)[0]
-        classes = svm_model.classes_
+    probs = svm_model.decision_function(vector)[0]
+    exp_probs = pd.Series(probs).rank(pct=True)
 
-        percentages = decision_to_percentages(decision_scores, classes)
-        prediction = classes[np.argmax(decision_scores)]
+    labels = svm_model.classes_
+    prob_df = pd.DataFrame({
+        "Sentimen": labels,
+        "Persentase (%)": (exp_probs.values * 100)
+    })
 
-        st.subheader("📊 Hasil Prediksi Sentimen")
+    st.dataframe(prob_df, use_container_width=True)
 
-        col_p, col_n, col_neu = st.columns(3)
-
-        col_p.metric("😊 Positif", f"{percentages.get('positive', 0):.2f}%")
-        col_n.metric("😡 Negatif", f"{percentages.get('negative', 0):.2f}%")
-        col_neu.metric("😐 Netral", f"{percentages.get('neutral', 0):.2f}%")
-
-        if prediction == "positive":
-            st.success("😊 Sentimen Dominan: POSITIF")
-        elif prediction == "negative":
-            st.error("😡 Sentimen Dominan: NEGATIF")
-        else:
-            st.info("😐 Sentimen Dominan: NETRAL")
-
-        st.caption(f"Teks setelah preprocessing: `{clean_input}`")
+    pred = svm_model.predict(vector)[0]
+    st.success(f"Sentimen Dominan: **{pred.upper()}**")
 
 # ===============================
-# TOP KATA SERING MUNCUL
+# TOP KATA
 # ===============================
 st.subheader("🔤 Top 15 Kata Paling Sering Muncul")
 
 def get_top_words(text_series, n=15):
     words = []
     for text in text_series.dropna():
-        tokens = text.split()
-        tokens = [t for t in tokens if t not in all_stopwords and len(t) > 3]
+        tokens = [t for t in text.split() if t not in all_stopwords and len(t) > 3]
         words.extend(tokens)
     return Counter(words).most_common(n)
 
-top_words = get_top_words(df["clean_text"])
-top_df = pd.DataFrame(top_words, columns=["Kata", "Frekuensi"])
-
+top_df = pd.DataFrame(get_top_words(df["clean_text"]), columns=["Kata", "Frekuensi"])
 st.dataframe(top_df, use_container_width=True)
 
 # ===============================
 # FOOTER
 # ===============================
 st.markdown("---")
-st.caption(
-    "📌 Metode: Support Vector Machine (SVM) | TF-IDF | "
-    "Analisis Sentimen Twitter | Dashboard Seminar Proposal"
-)
+st.caption("📌 Analisis Sentimen Twitter | TF-IDF + SVM | Seminar Proposal")
