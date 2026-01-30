@@ -3,13 +3,14 @@ import pandas as pd
 import nltk
 import re
 import json
+import joblib
+import os
 from collections import Counter
-import os  # === TAMBAHAN ===
 
 from nltk.corpus import stopwords
 
 # ===============================
-# NLTK setup
+# NLTK SETUP
 # ===============================
 nltk.download("stopwords")
 
@@ -18,7 +19,7 @@ stopwords_en = set(stopwords.words("english"))
 all_stopwords = stopwords_id.union(stopwords_en)
 
 # ===============================
-# Streamlit config
+# STREAMLIT CONFIG
 # ===============================
 st.set_page_config(
     page_title="Dashboard Analisis Sentimen Twitter (SVM)",
@@ -27,13 +28,13 @@ st.set_page_config(
 
 st.title("📊 Dashboard Analisis Sentimen Twitter")
 st.write(
-    "Dashboard ini menampilkan hasil **analisis sentimen Twitter** "
+    "Dashboard ini menampilkan hasil **analisis sentimen Twitter (Platform X)** "
     "menggunakan **Support Vector Machine (SVM)** berbasis **TF-IDF**. "
-    "Fokus utama dashboard adalah **eksplorasi dataset dan hasil klasifikasi**."
+    "Dashboard juga menyediakan fitur **uji sentimen secara langsung**."
 )
 
 # ===============================
-# Load dataset
+# LOAD DATASET
 # ===============================
 @st.cache_data
 def load_dataset():
@@ -42,7 +43,7 @@ def load_dataset():
 df = load_dataset()
 
 # ===============================
-# NORMALISASI LABEL SENTIMEN (TAMBAHAN PENTING)
+# NORMALISASI LABEL
 # ===============================
 df["sentiment"] = (
     df["sentiment"]
@@ -52,17 +53,33 @@ df["sentiment"] = (
 )
 
 # ===============================
-# DEBUG OPSIONAL (AMAN)
-# ===============================
-st.caption(f"Label sentimen terdeteksi: {df['sentiment'].unique()}")
-
-# ===============================
-# Pre-check kolom
+# VALIDASI KOLOM
 # ===============================
 required_cols = {"clean_text", "sentiment"}
 if not required_cols.issubset(df.columns):
     st.error("Dataset tidak memiliki kolom yang dibutuhkan.")
     st.stop()
+
+# ===============================
+# LOAD MODEL & VECTORIZER
+# ===============================
+@st.cache_resource
+def load_model():
+    model = joblib.load("svm_model.pkl")
+    vectorizer = joblib.load("tfidf_vectorizer.pkl")
+    return model, vectorizer
+
+svm_model, tfidf_vectorizer = load_model()
+
+# ===============================
+# PREPROCESS INPUT USER
+# ===============================
+def preprocess_input(text):
+    text = text.lower()
+    text = re.sub(r"http\S+|www\S+", "", text)
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 # ===============================
 # RINGKASAN DATASET
@@ -80,9 +97,7 @@ col4.metric("Neutral", (df["sentiment"] == "neutral").sum())
 # DISTRIBUSI SENTIMEN
 # ===============================
 st.subheader("📈 Distribusi Sentimen")
-
-sentiment_count = df["sentiment"].value_counts()
-st.bar_chart(sentiment_count)
+st.bar_chart(df["sentiment"].value_counts())
 
 # ===============================
 # CONTOH DATA ACAK
@@ -145,7 +160,7 @@ with col_neu:
         )
 
 # ===============================
-# PANJANG TWEET (EDA)
+# ANALISIS PANJANG TWEET
 # ===============================
 st.subheader("📏 Analisis Panjang Tweet")
 
@@ -172,7 +187,6 @@ st.bar_chart(
 # ===============================
 st.subheader("🎯 Evaluasi Model SVM")
 
-# === PATH METRICS (DISESUAIKAN) ===
 metrics_path = "model_metrics.json"
 
 if not os.path.exists(metrics_path):
@@ -182,7 +196,6 @@ if not os.path.exists(metrics_path):
 with open(metrics_path) as f:
     metrics = json.load(f)
 
-# === TAMBAHAN F1-SCORE ===
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("Accuracy", f"{metrics['accuracy']*100:.2f}%")
@@ -192,12 +205,40 @@ col4.metric("F1-Score (Avg)", f"{metrics['f1_score']*100:.2f}%")
 
 st.info(
     "Evaluasi model dilakukan menggunakan data uji (test set) "
-    "dengan metrik Accuracy, Precision, Recall, dan F1-score (macro average) "
-    "menggunakan metode Support Vector Machine (SVM) berbasis TF-IDF."
+    "dengan metrik Accuracy, Precision, Recall, dan F1-score "
+    "(macro average) menggunakan metode SVM berbasis TF-IDF."
 )
 
 # ===============================
-# TOP KATA PALING SERING MUNCUL
+# TESTING SENTIMEN MANUAL
+# ===============================
+st.subheader("🧠 Uji Sentimen Teks Secara Langsung")
+
+user_input = st.text_area(
+    "Masukkan teks / tweet:",
+    placeholder="Contoh: Donald Trump comments on Greenland policy...",
+    height=120
+)
+
+if st.button("🔍 Prediksi Sentimen"):
+    if user_input.strip() == "":
+        st.warning("Silakan masukkan teks terlebih dahulu.")
+    else:
+        clean_input = preprocess_input(user_input)
+        vectorized_input = tfidf_vectorizer.transform([clean_input])
+        prediction = svm_model.predict(vectorized_input)[0]
+
+        if prediction == "positive":
+            st.success("😊 Sentimen: POSITIF")
+        elif prediction == "negative":
+            st.error("😡 Sentimen: NEGATIF")
+        else:
+            st.info("😐 Sentimen: NETRAL")
+
+        st.caption(f"Teks setelah preprocessing: `{clean_input}`")
+
+# ===============================
+# TOP KATA SERING MUNCUL
 # ===============================
 st.subheader("🔤 Top 15 Kata Paling Sering Muncul")
 
@@ -210,8 +251,8 @@ def get_top_words(text_series, n=15):
     return Counter(words).most_common(n)
 
 top_words = get_top_words(df["clean_text"])
-
 top_df = pd.DataFrame(top_words, columns=["Kata", "Frekuensi"])
+
 st.dataframe(top_df, use_container_width=True)
 
 # ===============================
