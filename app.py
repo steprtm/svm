@@ -71,10 +71,48 @@ total = len(df)
 pos = (df["sentiment"] == "positive").sum()
 neg = (df["sentiment"] == "negative").sum()
 
+# hitung persentase
+pos_pct = (pos / total) * 100
+neg_pct = (neg / total) * 100
+
 col1, col2, col3 = st.columns(3)
+
 col1.metric("Total Tweet", total)
-col2.metric("Positive 😊", pos)
-col3.metric("Negative 😡", neg)
+
+with col2:
+    st.markdown(
+        f"""
+        <div style="
+            background-color:#e6f4ea;
+            padding:18px;
+            border-radius:12px;
+            text-align:center;
+        ">
+            <h3 style="color:green;margin-bottom:5px;">😊 Positive</h3>
+            <h2 style="margin:0;">{pos}</h2>
+            <p style="margin:0;">{pos_pct:.2f}%</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with col3:
+    st.markdown(
+        f"""
+        <div style="
+            background-color:#fdecea;
+            padding:18px;
+            border-radius:12px;
+            text-align:center;
+        ">
+            <h3 style="color:red;margin-bottom:5px;">😡 Negative</h3>
+            <h2 style="margin:0;">{neg}</h2>
+            <p style="margin:0;">{neg_pct:.2f}%</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 
 # ===============================
 # DISTRIBUSI SENTIMEN
