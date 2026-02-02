@@ -88,7 +88,7 @@ with col2:
             border-radius:12px;
             text-align:center;
         ">
-            <h3 style="color:green;margin-bottom:5px;">😊 Positive</h3>
+            <h3 style="color:green;margin-bottom:5px;">Positive</h3>
             <h2 style="margin:0;">{pos}</h2>
             <p style="margin:0;">{pos_pct:.2f}%</p>
         </div>
@@ -105,7 +105,7 @@ with col3:
             border-radius:12px;
             text-align:center;
         ">
-            <h3 style="color:red;margin-bottom:5px;">😡 Negative</h3>
+            <h3 style="color:red;margin-bottom:5px;">Negative</h3>
             <h2 style="margin:0;">{neg}</h2>
             <p style="margin:0;">{neg_pct:.2f}%</p>
         </div>
@@ -159,15 +159,48 @@ if st.button("Prediksi"):
     prob_pos = 1 / (1 + np.exp(-score))
     prob_neg = 1 - prob_pos
 
-    result_df = pd.DataFrame({
-        "Sentimen": ["Positive", "Negative"],
-        "Persentase (%)": [prob_pos*100, prob_neg*100]
-    })
-
-    st.dataframe(result_df, use_container_width=True)
-
     pred = svm_model.predict(vector)[0]
-    st.success(f"Hasil Prediksi: **{pred.upper()}**")
+
+col_pos, col_neg = st.columns(2)
+
+with col_pos:
+    st.markdown(
+        f"""
+        <div style="
+            background-color:#e6f4ea;
+            padding:20px;
+            border-radius:12px;
+            text-align:center;
+        ">
+            <h3 style="color:green;">😊 Positive</h3>
+            <h2 style="margin:0;">{prob_pos*100:.2f}%</h2>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with col_neg:
+    st.markdown(
+        f"""
+        <div style="
+            background-color:#fdecea;
+            padding:20px;
+            border-radius:12px;
+            text-align:center;
+        ">
+            <h3 style="color:red;">😡 Negative</h3>
+            <h2 style="margin:0;">{prob_neg*100:.2f}%</h2>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# hasil akhir prediksi
+if pred == "positive":
+    st.success(f"Sentimen Dominan: POSITIVE")
+else:
+    st.error(f"Sentimen Dominan: NEGATIVE")
+
 
 # ===============================
 # TOP WORDS
