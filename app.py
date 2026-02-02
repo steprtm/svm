@@ -159,47 +159,57 @@ if st.button("Prediksi"):
     prob_pos = 1 / (1 + np.exp(-score))
     prob_neg = 1 - prob_pos
 
+# ===============================
+# UJI SENTIMEN
+# ===============================
+st.subheader("🧠 Uji Sentimen Manual")
+
+user_input = st.text_area("Masukkan teks tweet:")
+
+if st.button("Prediksi") and user_input.strip() != "":
+
+    clean_input = preprocess_input(user_input)
+    vector = tfidf_vectorizer.transform([clean_input])
+
+    # ambil score SVM
+    score = svm_model.decision_function(vector)[0]
+
+    # hitung probabilitas
+    prob_pos = 1 / (1 + np.exp(-score))
+    prob_neg = 1 - prob_pos
+
     pred = svm_model.predict(vector)[0]
 
-col_pos, col_neg = st.columns(2)
+    # ===== CARD WARNA =====
+    col_pos, col_neg = st.columns(2)
 
-with col_pos:
-    st.markdown(
-        f"""
-        <div style="
-            background-color:#e6f4ea;
-            padding:20px;
-            border-radius:12px;
-            text-align:center;
-        ">
-            <h3 style="color:green;">😊 Positive</h3>
-            <h2 style="margin:0;">{prob_pos*100:.2f}%</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with col_pos:
+        st.markdown(
+            f"""
+            <div style="background:#e6f4ea;padding:20px;border-radius:12px;text-align:center">
+                <h3 style="color:green;">😊 Positive</h3>
+                <h2>{prob_pos*100:.2f}%</h2>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-with col_neg:
-    st.markdown(
-        f"""
-        <div style="
-            background-color:#fdecea;
-            padding:20px;
-            border-radius:12px;
-            text-align:center;
-        ">
-            <h3 style="color:red;">😡 Negative</h3>
-            <h2 style="margin:0;">{prob_neg*100:.2f}%</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with col_neg:
+        st.markdown(
+            f"""
+            <div style="background:#fdecea;padding:20px;border-radius:12px;text-align:center">
+                <h3 style="color:red;">😡 Negative</h3>
+                <h2>{prob_neg*100:.2f}%</h2>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-# hasil akhir prediksi
-if pred == "positive":
-    st.success(f"Sentimen Dominan: POSITIVE")
-else:
-    st.error(f"Sentimen Dominan: NEGATIVE")
+    # ===== HASIL DOMINAN =====
+    if pred == "positive":
+        st.success("Sentimen Dominan: POSITIVE 😊")
+    else:
+        st.error("Sentimen Dominan: NEGATIVE 😡")
 
 
 # ===============================
