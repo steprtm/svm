@@ -145,29 +145,53 @@ c4.metric("F1 Score", f"{metrics['f1_score']*100:.2f}%")
 # ===============================
 # UJI SENTIMEN
 # ===============================
+
 st.subheader("🧠 Uji Sentimen Manual")
 
 user_input = st.text_area("Masukkan teks tweet:")
 
-if st.button("Prediksi"):
+if st.button("Prediksi") and user_input.strip() != "":
+
     clean_input = preprocess_input(user_input)
     vector = tfidf_vectorizer.transform([clean_input])
 
-    score = svm_model.decision_function(vector)[0]
-
-    # convert ke probabilitas (sigmoid)
-    prob_pos = 1 / (1 + np.exp(-score))
-    prob_neg = 1 - prob_pos
-
-    result_df = pd.DataFrame({
-        "Sentimen": ["Positive", "Negative"],
-        "Persentase (%)": [prob_pos*100, prob_neg*100]
-    })
-
-    st.dataframe(result_df, use_container_width=True)
-
     pred = svm_model.predict(vector)[0]
-    st.success(f"Hasil Prediksi: **{pred.upper()}**")
+
+    # ===== OUTPUT WARNA =====
+    if pred == "positive":
+        st.markdown(
+            """
+            <div style="
+                background:#e6f4ea;
+                padding:30px;
+                border-radius:12px;
+                text-align:center;
+                font-size:28px;
+                font-weight:bold;
+                color:green;">
+                POSITIVE
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+        st.markdown(
+            """
+            <div style="
+                background:#fdecea;
+                padding:30px;
+                border-radius:12px;
+                text-align:center;
+                font-size:28px;
+                font-weight:bold;
+                color:red;">
+                NEGATIVE
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 
 # ===============================
 # TOP WORDS
